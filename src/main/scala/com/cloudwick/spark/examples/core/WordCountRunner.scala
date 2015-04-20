@@ -20,5 +20,7 @@ object WordCountRunner extends App with Logging {
   val lines = sc.textFile(inputPath)
   val counts = WordCount.count(lines, stopWords)
 
-  log.info(counts.collect().mkString("[", ", ", "]"))
+  // log.info(counts.collect().mkString("[", ", ", "]"))
+
+  counts.saveAsTextFile(outputPath)
 }

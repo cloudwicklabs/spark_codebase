@@ -22,15 +22,22 @@ import org.apache.spark.{Logging, SparkConf, SparkContext}
  * 2. Start a kafka broker local instance
  *      `bin/kafka-server-start.sh config/server.properties`
  * 3. Create a topic
- *      `bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic log-events`
+ *      `bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 \
+ *        --partitions 1 --topic log-events`
  * 4. Make sure the topic got created
  *      `bin/kafka-topics.sh --list --zookeeper localhost:2181`
- * 5. Start the [[https://github.com/cloudwicklabs/generator]] and start sending some messages to kafka
- *      `bin/generator log --eventsPerSec 1 --outputFormat text --destination kafka --kafkaTopicName log-events --totalEvents 10`
+ * 5. Start the [[https://github.com/cloudwicklabs/generator]] and start sending some messages to
+ *    kafka
+ *      `bin/generator log --eventsPerSec 1 --outputFormat text --destination kafka \
+ *        --kafkaTopicName log-events --totalEvents 10`
  * 6. Start this streaming job
- *      `spark-submit --class com.cloudwick.spark.loganalysis.LogAnalyzerRunner --master "local[*]" --files src/main/resources/GeoLite2-City.mmdb target/scala-2.10/spark_codebase-assembly-1.0.jar localhost:2181 loganalytics log-events 1`
+ *      `spark-submit --class com.cloudwick.spark.loganalysis.LogAnalyzerRunner --master "local[*]"\
+ *        --files src/main/resources/GeoLite2-City.mmdb \
+ *        target/scala-2.10/spark_codebase-assembly-1.0.jar \
+ *        localhost:2181 loganalytics log-events 1`
  * 7. Check the offset consumption of the topic
- *      `bin/kafka-consumer-offset-checker.sh --zookeeper localhost:2181 --topic log-events --group loganalytics`
+ *      `bin/kafka-consumer-offset-checker.sh --zookeeper localhost:2181 --topic log-events \
+ *        --group loganalytics`
  *
  * @author ashrith
  */
@@ -55,7 +62,7 @@ object LogAnalyzerRunner extends App with Logging {
 
   val Array(zkQuorum, group, topics, numThreads) = args
 
-  val sparkConf = new SparkConf().setAppName("KafkaWordCount")
+  val sparkConf = new SparkConf().setAppName("LogAnalytics")
 
   val sc = new SparkContext(sparkConf)
   // println(s"Adding GeoLiteDB file: $geoLiteDbFilePath...")
@@ -77,6 +84,7 @@ object LogAnalyzerRunner extends App with Logging {
 
   LogAnalyzer.countryCounter(lines) {(countryCount: RDD[CountryCount], time: Time) =>
     val counts = "CountryCounts: " + time + ": " + countryCount.collect().mkString("[", ", ", "]")
+    println(counts)
   }
 
   ssc.start()
