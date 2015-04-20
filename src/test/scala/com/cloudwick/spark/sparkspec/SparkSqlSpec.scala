@@ -3,9 +3,6 @@ package com.cloudwick.spark.sparkspec
 import org.apache.spark.sql.SQLContext
 import org.scalatest.Suite
 
-/**
- * Description goes here.
- */
 trait SparkSqlSpec extends SparkSpec {
   this: Suite =>
 

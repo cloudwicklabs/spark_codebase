@@ -4,9 +4,6 @@ import java.nio.file.Files
 import org.apache.spark.streaming.{Seconds, ClockWrapper, StreamingContext}
 import org.scalatest.Suite
 
-/**
- * Description goes here.
- */
 trait SparkStreamingSpec extends SparkSpec {
   this: Suite =>
 
