@@ -1,7 +1,7 @@
 *.class
 *.log
 wiki
-*/Random.sc
+*.sc
 
 # sbt specific
 dist/*
