@@ -31,20 +31,6 @@ case class LogEvent(ip: String,
                     userAgent: String)
 
 /**
- * Wrapper for representing status code counter
- * @param status http web server status code for a request (200, 404, 503, ...)
- * @param count number of events
- */
-case class StatusCount(status: Int, count: Long)
-
-/**
- * Wrapper for representing volume counts in minute
- * @param timeStamp epoch minute format
- * @param count number of hits
- */
-case class VolumeCount(timeStamp: Long, count: Long)
-
-/**
  * Wrapper for representing location from where the web request originated from
  * @param ip ip address of the lookup
  * @param country originating country
@@ -53,10 +39,3 @@ case class VolumeCount(timeStamp: Long, count: Long)
  * @param lon longitude
  */
 case class Location(ip: String, country: String, city: String, lat: Double, lon: Double)
-
-/**
- * Wrapper for representing country counts
- * @param country countries iso code
- * @param count number of times a country has appeared in batch
- */
-case class CountryCount(country: String, count: Long)

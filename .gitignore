@@ -2,6 +2,7 @@
 *.log
 wiki
 *.sc
+src/main/scala/com/cloudwick/Random.scala
 
 # sbt specific
 dist/*

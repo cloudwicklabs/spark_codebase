@@ -1,11 +1,12 @@
 package com.cloudwick.spark.loganalysis
 
-import java.io.{FileNotFoundException, File}
+import java.io.{File, FileNotFoundException}
 import java.net.InetAddress
 
+import com.cloudwick.cassandra.{CassandraLocationVisitServiceModule, CassandraLogVolumeServiceModule, CassandraStatusCountServiceModule}
+import com.cloudwick.cassandra.schema.{LocationVisit, LogVolume, StatusCount}
 import com.maxmind.geoip2.DatabaseReader.Builder
 import com.maxmind.geoip2.exception.AddressNotFoundException
-import com.maxmind.geoip2.model.CityResponse
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.StreamingContext._
 import org.apache.spark.streaming.Time
@@ -21,11 +22,12 @@ import scala.concurrent.duration._
  *
  * @author ashrith
  */
-object LogAnalyzer extends Logging {
+object LogAnalyzer extends CassandraStatusCountServiceModule
+  with CassandraLogVolumeServiceModule with CassandraLocationVisitServiceModule with Logging {
 
   type StatusHandler = (RDD[StatusCount], Time) => Unit
-  type VolumeHandler = (RDD[VolumeCount], Time) => Unit
-  type CountryHandler = (RDD[CountryCount], Time) => Unit
+  type VolumeHandler = (RDD[LogVolume], Time) => Unit
+  type LocationHandler = (RDD[LocationVisit], Time) => Unit
 
   private val logEventPattern = """([\d.]+) (\S+) (\S+) \[(.*)\] "([^\s]+) (/[^\s]*) HTTP/[^\s]+" (\d{3}) (\d+) "([^"]+)" "([^"]+)"""".r
   private val formatter = DateTimeFormat.forPattern("dd/MMM/yyyy:HH:mm:ss Z")
@@ -53,10 +55,12 @@ object LogAnalyzer extends Logging {
     val ipAddress = InetAddress.getByName(ip)
     try {
       val response = dbReader.city(ipAddress)
+      val country  = response.getCountry.getIsoCode match { case ""|null => "US" case x => x }
+      val city = response.getCity.getName match { case ""|null => "<empty>" case x => x }
       Some(
         Location(ip,
-          response.getCountry.getIsoCode,
-          response.getCity.getName,
+          country,
+          city,
           response.getLocation.getLatitude,
           response.getLocation.getLongitude))
     } catch {
@@ -73,7 +77,11 @@ object LogAnalyzer extends Logging {
     }
 
     statusCounts.foreachRDD((rdd: RDD[StatusCount], time: Time) => {
-      handler(rdd.sortBy(_.status), time)
+      handler(rdd.sortBy(_.statusCode), time) // executed at the driver
+
+      rdd.foreachPartition(partitionRecords => {
+        partitionRecords.foreach(statusCountService.update)
+      })
     })
   }
 
@@ -85,25 +93,33 @@ object LogAnalyzer extends Logging {
       val minutes = Duration(millis, MILLISECONDS).toMinutes
       (minutes, 1L)
     }.reduceByKey(_ + _).map {
-      case (minute: Long, count: Long) => VolumeCount(minute, count)
+      case (minute: Long, count: Long) => LogVolume(minute, count)
     }
 
-    volumeCounts.foreachRDD((rdd: RDD[VolumeCount], time: Time) => {
+    volumeCounts.foreachRDD((rdd: RDD[LogVolume], time: Time) => {
       handler(rdd.sortBy(_.timeStamp), time)
+
+      rdd.foreachPartition(partitionRecords => {
+        partitionRecords.foreach(logVolumeService.update)
+      })
     })
   }
 
-  def countryCounter(lines: DStream[String])(handler: CountryHandler): Unit = {
+  def countryCounter(lines: DStream[String])(handler: LocationHandler): Unit = {
     val events = lines.transform(prepareEvents _)
 
     val countryCounts = events.flatMap(
       event => resolveIp(event.ip)
-    ).map(loc => (loc.country, 1L)).reduceByKey(_ + _).map {
-      case(country: String, count: Long) => CountryCount(country, count)
+    ).map(loc => ((loc.country, loc.city), 1L)).reduceByKey(_ + _).map {
+      case((country: String, city: String), count: Long) => LocationVisit(country, city, count)
     }
 
-    countryCounts.foreachRDD((rdd: RDD[CountryCount], time: Time) => {
+    countryCounts.foreachRDD((rdd: RDD[LocationVisit], time: Time) => {
       handler(rdd.sortBy(_.country), time)
+
+      rdd.foreachPartition(partitionRecords => {
+        partitionRecords.foreach(locationVisitService.update)
+      })
     })
   }
 }

@@ -1,5 +1,6 @@
 package com.cloudwick.spark.loganalysis
 
+import com.cloudwick.cassandra.schema.{LocationVisit, LogVolume, StatusCount}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.streaming.{Seconds, StreamingContext, Time}
@@ -17,25 +18,27 @@ import org.apache.spark.{Logging, SparkConf, SparkContext}
  *  - Multiple kafka receivers for cluster deployments
  *
  * Running this job locally:
- * 1. Start a zookeeper local instance
+ * 1. Start a local Cassandra instance
+ *      `bin/cassandra -f`
+ * 2. Start a zookeeper local instance
  *      `bin/zookeeper-server-start.sh config/zookeeper.properties`
- * 2. Start a kafka broker local instance
+ * 3. Start a kafka broker local instance
  *      `bin/kafka-server-start.sh config/server.properties`
- * 3. Create a topic
+ * 4. Create a topic
  *      `bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 \
  *        --partitions 1 --topic log-events`
- * 4. Make sure the topic got created
+ * 5. Make sure the topic got created
  *      `bin/kafka-topics.sh --list --zookeeper localhost:2181`
- * 5. Start the [[https://github.com/cloudwicklabs/generator]] and start sending some messages to
+ * 6. Start the [[https://github.com/cloudwicklabs/generator]] and start sending some messages to
  *    kafka
  *      `bin/generator log --eventsPerSec 1 --outputFormat text --destination kafka \
- *        --kafkaTopicName log-events --totalEvents 10`
- * 6. Start this streaming job
+ *        --kafkaTopicName log-events --totalEvents 100 --flushBatch 10`
+ * 7. Start this streaming job
  *      `spark-submit --class com.cloudwick.spark.loganalysis.LogAnalyzerRunner --master "local[*]"\
  *        --files src/main/resources/GeoLite2-City.mmdb \
  *        target/scala-2.10/spark_codebase-assembly-1.0.jar \
  *        localhost:2181 loganalytics log-events 1`
- * 7. Check the offset consumption of the topic
+ * 8. Check the offset consumption of the topic
  *      `bin/kafka-consumer-offset-checker.sh --zookeeper localhost:2181 --topic log-events \
  *        --group loganalytics`
  *
@@ -73,16 +76,16 @@ object LogAnalyzerRunner extends App with Logging {
   val lines = KafkaUtils.createStream(ssc, zkQuorum, group, topicMap).map(_._2)
 
   LogAnalyzer.statusCounter(lines) {(statusCount: RDD[StatusCount], time: Time) =>
-    val counts = "StatusCounter: " + time + ": " + statusCount.collect().mkString("[", ", ", "]")
-    println(counts)
+    val statusCounts = statusCount.collect()
+    println("StatusCounter: " + time + ": " + statusCounts.mkString("[", ", ", "]"))
   }
 
-  LogAnalyzer.volumeCounter(lines) {(volumeCount: RDD[VolumeCount], time: Time) =>
+  LogAnalyzer.volumeCounter(lines) {(volumeCount: RDD[LogVolume], time: Time) =>
     val counts = "VolumeCounter: " + time + ": " + volumeCount.collect().mkString("[", ", ", "]")
     println(counts)
   }
 
-  LogAnalyzer.countryCounter(lines) {(countryCount: RDD[CountryCount], time: Time) =>
+  LogAnalyzer.countryCounter(lines) {(countryCount: RDD[LocationVisit], time: Time) =>
     val counts = "CountryCounts: " + time + ": " + countryCount.collect().mkString("[", ", ", "]")
     println(counts)
   }
