@@ -1,6 +1,7 @@
 package com.cloudwick.spark.loganalysis
 
 import com.cloudwick.cassandra.schema.{LocationVisit, LogVolume, StatusCount}
+import com.cloudwick.spark.examples.streaming.util.Utils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.streaming.{Seconds, StreamingContext, Time}
@@ -60,20 +61,23 @@ object LogAnalyzerRunner extends App with Logging {
   }
 
   val batchDuration = Seconds(5)
-  // val geoLiteDbFileName = "GeoLite2-City.mmdb"
-  // val geoLiteDbFilePath = Source.fromURL(getClass.getResource(s"/$geoLiteDbFileName"))
 
   val Array(zkQuorum, group, topics, numThreads) = args
 
-  val sparkConf = new SparkConf().setAppName("LogAnalytics")
+  Utils.setSparkLogLevels()
+
+  val sparkConf = new SparkConf()
+    .setAppName("LogAnalytics")
+    // .set("spark.executor.userClassPathFirst", "true")
+    // .set("spark.driver.userClassPathFirst", "true")
 
   val sc = new SparkContext(sparkConf)
-  // println(s"Adding GeoLiteDB file: $geoLiteDbFilePath...")
-  //  sc.addFile(geoLiteDbFilePath.toString())
   val ssc = new StreamingContext(sc, batchDuration)
 
   val topicMap = topics.split(",").map((_, numThreads.toInt)).toMap
   val lines = KafkaUtils.createStream(ssc, zkQuorum, group, topicMap).map(_._2)
+
+  println(this.getClass.getResource("/com/google/common/collect/Sets.class"))
 
   LogAnalyzer.statusCounter(lines) {(statusCount: RDD[StatusCount], time: Time) =>
     val statusCounts = statusCount.collect()

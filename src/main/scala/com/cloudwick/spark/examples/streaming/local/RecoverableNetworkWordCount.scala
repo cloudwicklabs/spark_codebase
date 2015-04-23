@@ -21,12 +21,12 @@ import org.apache.spark.{Logging, SparkConf}
  *
  * To run this on your local machine, you need to first run a NetCat server
  *
- *      `nc -lk 9999`
+ *  `nc -lk 9999`
  *
  * and run the program
  *
- *      `spark-submit --class com.cloudwick.spark.examples.streaming.local.RecoverableNetworkWordCount
- *        --master local[*] path-to-jar [args]`
+ *  `spark-submit --class com.cloudwick.spark.examples.streaming.local.RecoverableNetworkWordCount
+ *     --master local[*] path-to-jar [args]`
  *
  * If the directory ~/checkpoint/ does not exist (e.g. running for the first time), it will create
  * a new StreamingContext (will print "Creating new context" to the console). Otherwise, if

@@ -40,17 +40,21 @@ libraryDependencies ++= Seq(
     excludeAll ExclusionRule(organization = "org.slf4j"),
   "org.apache.curator" % "curator-test" % "2.4.0"
     excludeAll ExclusionRule(organization = "io.netty")
-    excludeAll ExclusionRule(organization = "org.jboss.netty"),
+    excludeAll ExclusionRule(organization = "org.jboss.netty")
+    exclude("com.google.guava", "guava"),
   "com.101tec" % "zkclient" % "0.4"
     exclude("org.apache.zookeeper", "zookeeper"),
   "joda-time" % "joda-time" % "2.7",
   "com.maxmind.geoip2" % "geoip2" % "2.1.0",
-  "com.websudos" %% "phantom-dsl" % PhantomVersion,
+  "com.websudos" %% "phantom-dsl" % PhantomVersion
+    exclude("com.google.guava", "guava"),
   "com.websudos" %% "phantom-zookeeper" % PhantomVersion
+    exclude("com.google.guava", "guava")
     excludeAll ExclusionRule(organization = "io.netty")
     excludeAll ExclusionRule(organization = "org.jboss.netty")
     excludeAll ExclusionRule(organization = "org.slf4j"),
   "com.typesafe" % "config" % "1.2.1",
+  "com.google.guava" % "guava" % "16.0.1",
   // Test dependencies
   "org.scalatest" %% "scalatest" % "2.2.4" % "test",
   "org.xerial.snappy" % "snappy-java" % "1.1.1.7"

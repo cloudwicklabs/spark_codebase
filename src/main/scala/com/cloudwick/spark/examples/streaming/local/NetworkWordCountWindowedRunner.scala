@@ -10,7 +10,7 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming.{Time, Seconds, StreamingContext}
 
 /**
- * Simple example illustrating the Network word count using windowed based opertaions. This example
+ * Simple example illustrating the Network word count using windowed based operations. This example
  * generates word counts over last 30 seconds of data, every 10 seconds
  *
  * Usage: NetworkWordCountWindowed <hostname> <port>

@@ -3,11 +3,11 @@ package com.cloudwick.spark.embedded
 import java.nio.file.Files
 import java.util.Properties
 
+import com.cloudwick.logging.Logging
 import kafka.admin.AdminUtils
 import kafka.server.{KafkaConfig, KafkaServerStartable}
 import kafka.utils.ZKStringSerializer
 import org.I0Itec.zkclient.ZkClient
-import org.apache.spark.Logging
 
 import scala.concurrent.duration._
 
@@ -45,7 +45,7 @@ class KafkaServer(config: Properties = new Properties) extends Logging {
     zkConnectLookup match {
       case Some(zkConnect) => zkConnect
       case _ =>
-        log.warn(s"zookeeper.connect is not configured -- falling back to default " +
+        logger.warn(s"zookeeper.connect is not configured -- falling back to default " +
           s"setting $defaultZkConnect")
         defaultZkConnect
     }
@@ -53,20 +53,20 @@ class KafkaServer(config: Properties = new Properties) extends Logging {
 
   // Start the broker
   def start() {
-    log.debug(s"Starting embedded Kafka broker at $brokerList (with ZK server " +
+    logger.debug(s"Starting embedded Kafka broker at $brokerList (with ZK server " +
       s"at $zookeeperConnect) ...")
     kafka.startup()
-    log.debug(s"Startup of embedded Kafka broker at $brokerList completed (with ZK server " +
+    logger.debug(s"Startup of embedded Kafka broker at $brokerList completed (with ZK server " +
       s"at $zookeeperConnect)")
   }
 
   // Stop the broker
   def stop() {
-    log.debug(s"Shutting down embedded Kafka broker at $brokerList (with ZK server " +
+    logger.debug(s"Shutting down embedded Kafka broker at $brokerList (with ZK server " +
       s"at $zookeeperConnect)...")
     kafka.shutdown()
     Files.deleteIfExists(logDir)
-    log.debug(s"Shutdown of embedded Kafka broker at $brokerList completed (with ZK server " +
+    logger.debug(s"Shutdown of embedded Kafka broker at $brokerList completed (with ZK server " +
       s"at $zookeeperConnect)")
   }
 
@@ -74,7 +74,7 @@ class KafkaServer(config: Properties = new Properties) extends Logging {
                   partitions: Int = 1,
                   replicationFactor: Int = 1,
                   config: Properties = new Properties): Unit = {
-    log.debug(s"Creating topic { name: $topic, partitions: $partitions, " +
+    logger.debug(s"Creating topic { name: $topic, partitions: $partitions, " +
       s"replicationFactor: $replicationFactor, config: $config }")
     val sessionTimeout = 10.seconds
     val connectionTimeout = 8.seconds
