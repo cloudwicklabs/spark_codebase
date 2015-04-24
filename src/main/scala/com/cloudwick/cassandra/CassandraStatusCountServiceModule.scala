@@ -2,14 +2,12 @@ package com.cloudwick.cassandra
 
 import com.cloudwick.cassandra.schema.{StatusCount, StatusCountRecord}
 import com.cloudwick.cassandra.service.StatusCountServiceModule
-import com.cloudwick.logging.Logging
+import com.cloudwick.logging.LazyLogging
 import com.websudos.phantom.Implicits._
-
-import scala.concurrent.Future
 
 trait CassandraStatusCountServiceModule extends StatusCountServiceModule with CassandraService {
 
-  object statusCountService extends StatusCountService with Logging {
+  object statusCountService extends StatusCountService with LazyLogging {
 
     override def update(statusCount: StatusCount) = {
       logger.trace(

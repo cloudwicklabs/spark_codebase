@@ -1,6 +1,5 @@
 package com.cloudwick.spark.examples.streaming.twitter
 
-import com.cloudwick.spark.examples.streaming.util.Utils
 import org.apache.spark.streaming.twitter.TwitterUtils
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.apache.spark.{SparkConf, Logging}
@@ -22,8 +21,6 @@ object TwitterPopularTags extends App with Logging {
       "<access token secret> [<filters>]")
     System.exit(1)
   }
-
-  Utils.setSparkLogLevels()
 
   val Array(consumerKey, consumerSecret, accessToken, accessTokenSecret) = args.take(4)
   val filters = args.takeRight(args.length - 4)

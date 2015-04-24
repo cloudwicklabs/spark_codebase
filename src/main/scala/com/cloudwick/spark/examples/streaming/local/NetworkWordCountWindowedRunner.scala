@@ -3,7 +3,6 @@ package com.cloudwick.spark.examples.streaming.local
 import java.nio.file.Files
 import com.cloudwick.spark.examples.core.WordCount
 import com.cloudwick.spark.examples.streaming.local.NetworkWordCountWindowed._
-import com.cloudwick.spark.examples.streaming.util.Utils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{Logging, SparkConf}
 import org.apache.spark.storage.StorageLevel
@@ -39,8 +38,6 @@ object NetworkWordCountWindowedRunner extends App with Logging {
   val stopWords = Set("a", "an", "the")
 
   log.info(s"Connecting to host: $hostname port: $port")
-
-  Utils.setSparkLogLevels()
 
   // Create a local StreamingContext with master & specified batch interval
   val conf = new SparkConf().setAppName("NetworkWordCount")

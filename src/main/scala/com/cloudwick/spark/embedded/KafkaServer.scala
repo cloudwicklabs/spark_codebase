@@ -3,7 +3,7 @@ package com.cloudwick.spark.embedded
 import java.nio.file.Files
 import java.util.Properties
 
-import com.cloudwick.logging.Logging
+import com.cloudwick.logging.LazyLogging
 import kafka.admin.AdminUtils
 import kafka.server.{KafkaConfig, KafkaServerStartable}
 import kafka.utils.ZKStringSerializer
@@ -21,7 +21,7 @@ import scala.concurrent.duration._
  * @param config Broker configuration settings.  Used to modify, for example, on which port the
  *               broker should listen to.
  */
-class KafkaServer(config: Properties = new Properties) extends Logging {
+class KafkaServer(config: Properties = new Properties) extends LazyLogging {
   private val defaultZkConnect = "127.0.0.1:2181"
   private val logDir = Files.createTempDirectory(this.getClass.getSimpleName)
 

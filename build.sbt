@@ -1,3 +1,4 @@
+import sbt.ExclusionRule
 import sbt.Keys._
 
 name := "spark_codebase"
@@ -18,7 +19,7 @@ resolvers ++= Seq(
   "Websudos releases"               at "http://maven.websudos.co.uk/ext-release-local"
 )
 
-val sparkVersion = "1.2.1"
+val sparkVersion = "1.3.0"
 val PhantomVersion = "1.6.0"
 
 libraryDependencies ++= Seq(
@@ -29,6 +30,8 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-streaming-kafka" % sparkVersion
     exclude("org.apache.zookeeper", "zookeeper"),
   "org.apache.spark" %% "spark-streaming-twitter" % sparkVersion,
+  "org.apache.spark" %% "spark-streaming-kinesis-asl" % sparkVersion
+    excludeAll ExclusionRule(organization = "org.apache.spark", name = "spark-streaming_2.10"),
   "org.slf4j" % "slf4j-api" % "1.7.12",
   "org.apache.kafka" %% "kafka" % "0.8.2.1"
     exclude("javax.jms", "jms")
@@ -45,7 +48,8 @@ libraryDependencies ++= Seq(
   "com.101tec" % "zkclient" % "0.4"
     exclude("org.apache.zookeeper", "zookeeper"),
   "joda-time" % "joda-time" % "2.7",
-  "com.maxmind.geoip2" % "geoip2" % "2.1.0",
+  "com.maxmind.geoip2" % "geoip2" % "2.1.0"
+    exclude("org.apache.httpcomponents", "httpclient"),
   "com.websudos" %% "phantom-dsl" % PhantomVersion
     exclude("com.google.guava", "guava"),
   "com.websudos" %% "phantom-zookeeper" % PhantomVersion
@@ -73,9 +77,20 @@ test in assembly := {}
 assemblyMergeStrategy in assembly := {
   case PathList("javax", "servlet", xs @ _*)                => MergeStrategy.first
   case PathList(ps @ _*) if ps.last endsWith ".html"        => MergeStrategy.first
+  case PathList("com", "google", "common", "base", xs @ _*) => MergeStrategy.first
   case "application.conf"                                   => MergeStrategy.concat
   case "com/twitter/common/args/apt/cmdline.arg.info.txt.1" => MergeStrategy.first
+  case "org/apache/spark/unused/UnusedStubClass.class"      => MergeStrategy.first
+  case "log4j.properties"                                   => MergeStrategy.first
+  case "reference.conf"                                     => MergeStrategy.concat
   case x =>
     val oldStrategy = (assemblyMergeStrategy in assembly).value
     oldStrategy(x)
+}
+
+assemblyExcludedJars in assembly <<= (fullClasspath in assembly) map { cp =>
+  val excludes = Set(
+    "commons-httpclient-3.1.jar"
+  )
+  cp filter { jar => excludes(jar.data.getName) }
 }

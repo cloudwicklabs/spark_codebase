@@ -2,13 +2,13 @@ package com.cloudwick.spark.examples.streaming.kafka
 
 import java.nio.file.Files
 
+import com.cloudwick.logging.LazyLogging
 import com.cloudwick.spark.examples.core.WordCount
 import com.cloudwick.spark.examples.streaming.local.NetworkWordCountWindowed
-import com.cloudwick.spark.examples.streaming.util.Utils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.streaming.{Seconds, StreamingContext, Time}
-import org.apache.spark.{Logging, SparkConf}
+import org.apache.spark.SparkConf
 
 /**
  * Consumes messages from one or more topics in Kafka and does word-count.
@@ -30,9 +30,9 @@ import org.apache.spark.{Logging, SparkConf}
  * 7. Check the offset consumption of the topic
  *      `bin/kafka-consumer-offset-checker.sh --zookeeper localhost:2181 --topic test-wc --group stcg`
  */
-object KafkaWordCount extends App with Logging {
+object KafkaWordCount extends App with LazyLogging {
   if (args.length < 4) {
-    log.error(
+    logger.error(
       """
         |Usage: KafkaWordCount <zkQuorum> <group> <topics> <numThreads>
         |         zkQuorum - Zookeeper quorum (hostname:port,hostname:port,..)
@@ -44,8 +44,6 @@ object KafkaWordCount extends App with Logging {
     )
     System.exit(1)
   }
-
-  Utils.setSparkLogLevels()
 
   val Array(zkQuorum, group, topics, numThreads) = args
   val batchDuration = Seconds(5)

@@ -1,7 +1,6 @@
 package com.cloudwick.spark.examples.streaming.local
 
 import com.cloudwick.spark.examples.core.WordCount
-import com.cloudwick.spark.examples.streaming.util.Utils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming.{Seconds, StreamingContext, Time}
@@ -30,8 +29,6 @@ object NetworkWordCountRunner extends App with Logging {
 
   val Array(host, port, batchInterval) = args
   val stopWords = Set("a", "an", "the")
-
-  Utils.setSparkLogLevels()
 
   val conf = new SparkConf().setAppName("NetworkWordCount")
   val ssc = new StreamingContext(conf, Seconds(batchInterval.toInt))

@@ -2,7 +2,7 @@ package com.cloudwick.cassandra
 
 import com.cloudwick.cassandra.schema.{LocationVisit, LocationVisitRecord}
 import com.cloudwick.cassandra.service.LocationVisitServiceModule
-import com.cloudwick.logging.Logging
+import com.cloudwick.logging.LazyLogging
 import com.websudos.phantom.Implicits._
 
 import scala.concurrent.Future
@@ -13,7 +13,7 @@ import scala.concurrent.Future
  */
 trait CassandraLocationVisitServiceModule extends LocationVisitServiceModule with CassandraService {
 
-  object locationVisitService extends LocationVisitService with Logging {
+  object locationVisitService extends LocationVisitService with LazyLogging {
 
     override def update(locationVisit: LocationVisit) = {
       logger.trace(

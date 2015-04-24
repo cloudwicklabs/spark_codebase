@@ -2,12 +2,12 @@ package com.cloudwick.cassandra
 
 import com.cloudwick.cassandra.schema.{LogVolume, LogVolumeRecord}
 import com.cloudwick.cassandra.service.LogVolumeServiceModule
-import com.cloudwick.logging.Logging
+import com.cloudwick.logging.LazyLogging
 import com.websudos.phantom.Implicits._
 
 trait CassandraLogVolumeServiceModule extends LogVolumeServiceModule with CassandraService {
 
-  object logVolumeService extends LogVolumeService with Logging {
+  object logVolumeService extends LogVolumeService with LazyLogging {
     override def update(logVolume: LogVolume) = {
       logger.trace(
         s"Update volume per minute count. Minute: ${logVolume.timeStamp} " +

@@ -1,7 +1,6 @@
 package com.cloudwick.spark.loganalysis
 
 import com.cloudwick.cassandra.schema.{LocationVisit, LogVolume, StatusCount}
-import com.cloudwick.spark.examples.streaming.util.Utils
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.streaming.{Seconds, StreamingContext, Time}
@@ -63,8 +62,6 @@ object LogAnalyzerRunner extends App with Logging {
   val batchDuration = Seconds(5)
 
   val Array(zkQuorum, group, topics, numThreads) = args
-
-  Utils.setSparkLogLevels()
 
   val sparkConf = new SparkConf()
     .setAppName("LogAnalytics")

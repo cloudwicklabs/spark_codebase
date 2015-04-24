@@ -1,11 +1,12 @@
 package com.cloudwick.spark.examples.core
 
+import com.cloudwick.logging.LazyLogging
 import org.apache.spark.{Logging, SparkConf, SparkContext}
 
 /**
  * Simple word count program to illustrate spark standalone applications usage
  */
-object WordCountRunner extends App with Logging {
+object WordCountRunner extends App with LazyLogging {
   if (args.length < 2) {
     System.err.println("Usage: WordCountRunner input_path output_path")
     System.exit(1)
@@ -20,7 +21,7 @@ object WordCountRunner extends App with Logging {
   val lines = sc.textFile(inputPath)
   val counts = WordCount.count(lines, stopWords)
 
-  // log.info(counts.collect().mkString("[", ", ", "]"))
+  // logger.info(counts.collect().mkString("[", ", ", "]"))
 
   counts.saveAsTextFile(outputPath)
 }
