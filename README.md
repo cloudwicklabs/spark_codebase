@@ -14,7 +14,9 @@ This repository is a collection of Spark examples & use-case implementations for
     * KafkaWordCount
 * Spark core use-cases
 * Spark streaming use-cases
-    * LogAnalytics
+    * LogAnalytics - A simple spark streaming use-case to perform apache log analysis which could
+                     read data from Kafka & Kinesis performs some analysis and persists the result's
+                     to cassandra.
 * Testing
     * ScalaTest spec traits for Spark core, streaming and SQL API(s)
     * Embedded Kafka and Zookeeper embedded server instances for testing
