@@ -7,7 +7,7 @@ import com.cloudwick.cassandra.schema.{LocationVisit, LogVolume, StatusCount}
 import com.typesafe.config.ConfigFactory
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.streaming.dstream.{DStream, ReceiverInputDStream}
+import org.apache.spark.streaming.dstream.DStream
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.streaming.kinesis.KinesisUtils
 import org.apache.spark.streaming.{Seconds, StreamingContext, Time}
@@ -96,6 +96,8 @@ object LogAnalyzerRunner extends App with Logging {
   val topics = config.getString("kafka.topics")
   val numThreads = config.getInt("kafka.threads")
   val streamName = config.getString("kinesis.stream.name")
+  val streamAppname = config.getString("kinesis.app.name")
+  val streamInitialPosition = config.getString("kinesis.initial.position")
   val awsAccessKey = config.getString("kinesis.aws.access.key")
   val awsSecretKey = config.getString("kinesis.aws.secret.key")
   val endPointUrl = config.getString("kinesis.aws.endpoint.url")
@@ -103,7 +105,7 @@ object LogAnalyzerRunner extends App with Logging {
   val batchDuration = Seconds(5)
 
   val sparkConf = new SparkConf()
-    .setAppName("LogAnalytics")
+    .setAppName(streamAppname)
     // .set("spark.executor.userClassPathFirst", "true")
     // .set("spark.driver.userClassPathFirst", "true")
 
@@ -125,7 +127,7 @@ object LogAnalyzerRunner extends App with Logging {
       System.setProperty("aws.secretKey", awsSecretKey)
       val kinesisStreams = (0 until numShards).map { i =>
         KinesisUtils.createStream(ssc, streamName, endPointUrl, batchDuration,
-          InitialPositionInStream.TRIM_HORIZON, StorageLevel.MEMORY_AND_DISK_2)
+          InitialPositionInStream.valueOf(streamInitialPosition), StorageLevel.MEMORY_AND_DISK_2)
       }
       lines = ssc.union(kinesisStreams).map(new String(_))
   }
