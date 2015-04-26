@@ -20,14 +20,15 @@ import org.apache.spark.{Logging, SparkConf, SparkContext}
  *  - Aggregates per minute hits received by the web server
  *
  * TODO:
- *  - Add CheckPointing
+ *  - Add checkpointing
  *  - Add windowed based transformations
- *  - Multiple kafka receivers for cluster deployments
+ *  - Use Kafka Direct API
  *
  * Running this job locally:
  * 1. Start a local Cassandra instance
  *      `${CASSANDRA_HOME}/bin/cassandra -f`
- * 2. Edit `src/main/resources/reference.conf` to match respective properties*
+ * 2. Edit `src/main/resources/reference.conf` to match respective properties
+ *    NOTE: Once the file has been updated you have to rebuild the project using `sbt assembly`
  * 3. If using Kafka as data source:
  *    i. Start a zookeeper local instance
  *      `${KAFKA_HOME}/bin/zookeeper-server-start.sh config/zookeeper.properties`
@@ -48,14 +49,14 @@ import org.apache.spark.{Logging, SparkConf, SparkContext}
  * 4. If using kinesis as a data source:
  *    i. Start the [[https://github.com/cloudwicklabs/generator]] and start sending some messages to
  *       kinesis
- *       ${GENERATOR_HOME}/bin/generator log --eventsPerSec 1 --outputFormat text \
+ *       `${GENERATOR_HOME}/bin/generator log --eventsPerSec 1 --outputFormat text \
  *        --destination kinesis --kinesisStreamName logevents --kinesisShardCount 1 \
  *        --awsAccessKey [your_aws_access_key] --awsSecretKey [your_aws_secret_key] \
  *        --awsEndPoint [aws_end_point_url] --loggingLevel debug`
  * 5. Start this streaming job
- *      `${SPARK_HOME}/spark-submit --class com.cloudwick.spark.loganalysis.LogAnalyzerRunner \
+ *      `${SPARK_HOME}/bin/spark-submit --class com.cloudwick.spark.loganalysis.LogAnalyzerRunner \
  *        --master "local[*]" --files src/main/resources/GeoLite2-City.mmdb \
- *        target/scala-2.10/spark_codebase-assembly-1.0.jar [kafka|kinesis]`
+ *        target/scala-2.10/spark_codebase-assembly-1.0.jar [kafka|kinesis] [path_to_config]`
  *
  * @author ashrith
  */
@@ -90,11 +91,14 @@ object LogAnalyzerRunner extends App with Logging {
     client
   }
 
-  private[this] val config = ConfigFactory.load()
+  val configFile = if (args.length > 1) args(1) else "default"
+
+  private[this] val config = ConfigFactory.load(configFile)
   val zkQuorum = config.getString("kafka.zookeeper.quorum")
   val group = config.getString("kafka.consumer.group")
   val topics = config.getString("kafka.topics")
   val numThreads = config.getInt("kafka.threads")
+  val kafkaParallelism = config.getInt("kafka.parallelism")
   val streamName = config.getString("kinesis.stream.name")
   val streamAppname = config.getString("kinesis.app.name")
   val streamInitialPosition = config.getString("kinesis.initial.position")
@@ -117,20 +121,26 @@ object LogAnalyzerRunner extends App with Logging {
   args(0) match {
     case "kafka"|"KAFKA" =>
       val topicMap = topics.split(",").map((_, numThreads.toInt)).toMap
-      lines = KafkaUtils.createStream(ssc, zkQuorum, group, topicMap).map(_._2)
+      val kafkaList = (0 until kafkaParallelism).map { _ =>
+        KafkaUtils.createStream(ssc, zkQuorum, group, topicMap, StorageLevel.MEMORY_AND_DISK_2).map(_._2)
+      }
+      lines = ssc.union(kafkaList)
     case "kinesis"|"KINESIS" =>
       val kinesisClient = fromCredentials(awsAccessKey, awsSecretKey, endPointUrl)
+      // create multiple receivers based on number of stream shards
       val numShards = kinesisClient.describeStream(streamName).getStreamDescription.getShards.size
-      // KinesisUtils uses aws java sdk which requires to read aws credentials from system
-      // properties.
+      // KinesisUtils uses aws java sdk which requires reading aws creds from system properties
       System.setProperty("aws.accessKeyId", awsAccessKey)
       System.setProperty("aws.secretKey", awsSecretKey)
-      val kinesisStreams = (0 until numShards).map { i =>
+      val kinesisStreams = (0 until numShards).map { _ =>
         KinesisUtils.createStream(ssc, streamName, endPointUrl, batchDuration,
           InitialPositionInStream.valueOf(streamInitialPosition), StorageLevel.MEMORY_AND_DISK_2)
       }
       lines = ssc.union(kinesisStreams).map(new String(_))
   }
+
+  // create required cassandra schema for storing the results
+  LogAnalyzer.createCassandraSchema()
 
   // check where guava is loading from.
   // println(this.getClass.getResource("/com/google/common/collect/Sets.class"))
