@@ -7,8 +7,6 @@ import org.scalatest.{Suite, BeforeAndAfterAll}
  * Extending the Suite for convenience, this base SparkSpec set's the SparkContext app
  */
 trait SparkSpec extends BeforeAndAfterAll {
-  // self type of the trait
-  //  meaning "SparkSpec cannot be mixed into a concrete class that does not also extend Suite"
   this: Suite =>
 
   private val master = "local[2]"
