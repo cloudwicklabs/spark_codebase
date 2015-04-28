@@ -1,6 +1,6 @@
 package org.apache.spark.streaming
 
-import org.apache.spark.streaming.util.ManualClock
+import org.apache.spark.util.ManualClock
 
 /**
  * Spark Streaming transformations are depend on batch interval's. We should wait for at-least the
@@ -10,11 +10,11 @@ import org.apache.spark.streaming.util.ManualClock
 class ClockWrapper(ssc: StreamingContext) {
   private def manualClock: ManualClock = ssc.scheduler.clock.asInstanceOf[ManualClock]
 
-  def getTimeMillis: Long = manualClock.currentTime()
+  def getTimeMillis: Long = manualClock.getTimeMillis()
 
   def setTime(time: Long) = manualClock.setTime(time)
 
-  def advance(timeToAdd: Long) = manualClock.addToTime(timeToAdd)
+  def advance(timeToAdd: Long) = manualClock.advance(timeToAdd)
 
   def waitTillTime(targetTime: Long) = manualClock.waitTillTime(targetTime)
 }
