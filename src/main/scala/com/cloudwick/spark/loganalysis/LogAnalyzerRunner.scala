@@ -1,16 +1,20 @@
 package com.cloudwick.spark.loganalysis
 
+import java.io.File
+import java.nio.file.{Paths, Files}
+
 import com.amazonaws.auth.AWSCredentials
 import com.amazonaws.services.kinesis.AmazonKinesisClient
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.InitialPositionInStream
 import com.cloudwick.cassandra.schema.{LocationVisit, LogVolume, StatusCount}
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
+import kafka.serializer.StringDecoder
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming.dstream.DStream
 import org.apache.spark.streaming.kafka.KafkaUtils
 import org.apache.spark.streaming.kinesis.KinesisUtils
-import org.apache.spark.streaming.{Seconds, StreamingContext, Time}
+import org.apache.spark.streaming.{Milliseconds, Seconds, StreamingContext, Time}
 import org.apache.spark.{Logging, SparkConf, SparkContext}
 
 /**
@@ -18,11 +22,10 @@ import org.apache.spark.{Logging, SparkConf, SparkContext}
  *  - Aggregates globally total number of times a status code's (200, 404, 503, ...) have been
  *    encountered
  *  - Aggregates per minute hits received by the web server
+ *  - Aggregates counts based on Country & City the request originated from using GeoLocation lookup
  *
  * TODO:
- *  - Add checkpointing
  *  - Add windowed based transformations
- *  - Use Kafka Direct API
  *
  * Running this job locally:
  * 1. Start a local Cassandra instance
@@ -56,7 +59,7 @@ import org.apache.spark.{Logging, SparkConf, SparkContext}
  * 5. Start this streaming job
  *      `${SPARK_HOME}/bin/spark-submit --class com.cloudwick.spark.loganalysis.LogAnalyzerRunner \
  *        --master "local[*]" --files src/main/resources/GeoLite2-City.mmdb \
- *        target/scala-2.10/spark_codebase-assembly-1.0.jar [kafka|kinesis] [path_to_config]`
+ *        target/scala-2.10/spark_codebase-assembly-1.0.jar [kafka|kinesis] [config_file]`
  *
  * @author ashrith
  */
@@ -65,7 +68,7 @@ object LogAnalyzerRunner extends App with Logging {
     log.error(
       """
         |Usage: KafkaWordCount <source>
-        |         source - specifies where to read data from, ex: kinesis, kafka
+        |         source - specifies where to read data from, ex: kinesis, kafka, kafka-direct
       """.stripMargin
     )
     System.exit(1)
@@ -91,74 +94,136 @@ object LogAnalyzerRunner extends App with Logging {
     client
   }
 
-  val configFile = if (args.length > 1) args(1) else "default"
+  var config: Config = args.length match {
+    case 2 =>
+      val configFile = args(1)
+      if (Files.exists(Paths.get(configFile))) {
+        ConfigFactory.parseFile(new File(configFile))
+      } else {
+        log.warn("Cannot find config file specified at {}. Falling back to default.", args(1))
+        ConfigFactory.load("default")
+      }
+    case _ =>
+      ConfigFactory.load("default")
+  }
 
-  private[this] val config = ConfigFactory.load(configFile)
-  val zkQuorum = config.getString("kafka.zookeeper.quorum")
-  val group = config.getString("kafka.consumer.group")
-  val topics = config.getString("kafka.topics")
-  val numThreads = config.getInt("kafka.threads")
-  val kafkaParallelism = config.getInt("kafka.parallelism")
-  val streamName = config.getString("kinesis.stream.name")
-  val streamAppname = config.getString("kinesis.app.name")
-  val streamInitialPosition = config.getString("kinesis.initial.position")
-  val awsAccessKey = config.getString("kinesis.aws.access.key")
-  val awsSecretKey = config.getString("kinesis.aws.secret.key")
-  val endPointUrl = config.getString("kinesis.aws.endpoint.url")
+  private[this] val kafkaConfig = config.resolve.getConfig("kafka")
+  val zkQuorum = kafkaConfig.getString("zookeeper.quorum")
+  val brokers = kafkaConfig.getString("brokers")
+  val group = kafkaConfig.getString("consumer.group")
+  val topics = kafkaConfig.getString("topics")
+  val numThreads = kafkaConfig.getInt("threads")
+  val kafkaParallelism = kafkaConfig.getInt("parallelism")
+  private[this] val kinesisConfig = config.resolve.getConfig("kinesis")
+  val streamName = kinesisConfig.getString("stream.name")
+  val streamAppname = kinesisConfig.getString("app.name")
+  val streamInitialPosition = kinesisConfig.getString("initial.position")
+  val awsAccessKey = kinesisConfig.getString("aws.access.key")
+  val awsSecretKey = kinesisConfig.getString("aws.secret.key")
+  val endPointUrl = kinesisConfig.getString("aws.endpoint.url")
+  private[this] val streamingAppConfig = config.resolve.getConfig("streaming")
+  val walEnabled = streamingAppConfig.getString("wal.enabled")
+  val batchDuration = streamingAppConfig.getInt("batch.duration.ms")
+  var checkpointDir = streamingAppConfig.getString("checkpoint.dir")
+  if (checkpointDir.isEmpty) {
+    checkpointDir = Files.createTempDirectory(this.getClass.getSimpleName).toString
+  }
 
-  val batchDuration = Seconds(5)
-
-  val sparkConf = new SparkConf()
-    .setAppName(streamAppname)
+  /**
+   * Creates a Streaming context
+   * @return
+   */
+  def createContext() = {
+    println("Creating new Spark Streaming Context...")
+    val sparkConf = new SparkConf()
+      .setAppName(streamAppname)
+      .set("spark.streaming.receiver.writeAheadLog.enable", walEnabled)
     // .set("spark.executor.userClassPathFirst", "true")
     // .set("spark.driver.userClassPathFirst", "true")
 
-  val sc = new SparkContext(sparkConf)
-  val ssc = new StreamingContext(sc, batchDuration)
+    val sc = new SparkContext(sparkConf)
+    val ssc = new StreamingContext(sc, Milliseconds(batchDuration))
+    var lines: DStream[String] = null
 
-  var lines: DStream[String] = _
+    val defaultStorageLevel = walEnabled match {
+      case "true" => StorageLevel.MEMORY_AND_DISK
+      case "false" => StorageLevel.MEMORY_AND_DISK_2
+    }
 
-  args(0) match {
-    case "kafka"|"KAFKA" =>
-      val topicMap = topics.split(",").map((_, numThreads.toInt)).toMap
-      val kafkaList = (0 until kafkaParallelism).map { _ =>
-        KafkaUtils.createStream(ssc, zkQuorum, group, topicMap, StorageLevel.MEMORY_AND_DISK_2).map(_._2)
-      }
-      lines = ssc.union(kafkaList)
-    case "kinesis"|"KINESIS" =>
-      val kinesisClient = fromCredentials(awsAccessKey, awsSecretKey, endPointUrl)
-      // create multiple receivers based on number of stream shards
-      val numShards = kinesisClient.describeStream(streamName).getStreamDescription.getShards.size
-      // KinesisUtils uses aws java sdk which requires reading aws creds from system properties
-      System.setProperty("aws.accessKeyId", awsAccessKey)
-      System.setProperty("aws.secretKey", awsSecretKey)
-      val kinesisStreams = (0 until numShards).map { _ =>
-        KinesisUtils.createStream(ssc, streamName, endPointUrl, batchDuration,
-          InitialPositionInStream.valueOf(streamInitialPosition), StorageLevel.MEMORY_AND_DISK_2)
-      }
-      lines = ssc.union(kinesisStreams).map(new String(_))
+    args(0) match {
+      case "kafka"|"KAFKA" =>
+        /*
+         * Kafka receiver based approach
+         */
+        val topicMap = topics.split(",").map((_, numThreads.toInt)).toMap
+        val kafkaList = (0 until kafkaParallelism).map { _ =>
+          KafkaUtils.createStream(ssc, zkQuorum, group, topicMap, defaultStorageLevel).map(_._2)
+        }
+        lines = ssc.union(kafkaList)
+      case "kafka-direct"|"KAFKA-DIRECT" =>
+        /*
+         * Using kafka direct api (no receiver-based approach)
+         * Features:
+         *  - # RDD partitions = # Kafka topic partitions
+         *  - No WAL
+         *  - Exactly once semantics by using Kafka simple API
+         *
+         * NOTE: This is a experimental feature introduced in 1.3
+         */
+        val topicsSet = topics.split(",").toSet
+        val kafkaParams = Map[String, String]("metadata.broker.list" -> brokers)
+        val directKafkaStream =
+          KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](
+            ssc, kafkaParams, topicsSet)
+        lines = directKafkaStream.map(_._2)
+      case "kinesis"|"KINESIS" =>
+        /*
+         * Kinesis receiver initialization
+         */
+        val kinesisClient = fromCredentials(awsAccessKey, awsSecretKey, endPointUrl)
+        // create multiple receivers based on number of stream shards
+        val numShards = kinesisClient.describeStream(streamName).getStreamDescription.getShards.size
+        // KinesisUtils uses aws java sdk which requires reading aws creds from system properties
+        System.setProperty("aws.accessKeyId", awsAccessKey)
+        System.setProperty("aws.secretKey", awsSecretKey)
+        val kinesisStreams = (0 until numShards).map { _ =>
+          KinesisUtils.createStream(ssc, streamName, endPointUrl, Milliseconds(batchDuration),
+            InitialPositionInStream.valueOf(streamInitialPosition), defaultStorageLevel)
+        }
+        lines = ssc.union(kinesisStreams).map(new String(_))
+      case _ =>
+        log.error("Unexpected value found as argument.")
+        System.exit(1)
+    }
+
+    // create required cassandra schema for storing the results
+    LogAnalyzer.createCassandraSchema()
+
+    LogAnalyzer.statusCounter(lines) {(statusCount: RDD[StatusCount], time: Time) =>
+      val statusCounts = statusCount.collect()
+      println("StatusCounter: " + time + ": " + statusCounts.mkString("[", ", ", "]"))
+    }
+
+    LogAnalyzer.volumeCounter(lines) {(volumeCount: RDD[LogVolume], time: Time) =>
+      val counts = "VolumeCounter: " + time + ": " + volumeCount.collect().mkString("[", ", ", "]")
+      println(counts)
+    }
+
+    LogAnalyzer.countryCounter(lines) {(countryCount: RDD[LocationVisit], time: Time) =>
+      val counts = "CountryCounts: " + time + ": " + countryCount.collect().mkString("[", ", ", "]")
+      println(counts)
+    }
+
+    /*
+     * Set the checkpoint directory
+     */
+    println("Checkpoint Dir: " + checkpointDir.toString)
+    ssc.checkpoint(checkpointDir)
+
+    ssc
   }
 
-  // create required cassandra schema for storing the results
-  LogAnalyzer.createCassandraSchema()
-
-  // check where guava is loading from.
-  // println(this.getClass.getResource("/com/google/common/collect/Sets.class"))
-
-  LogAnalyzer.statusCounter(lines) {(statusCount: RDD[StatusCount], time: Time) =>
-    val statusCounts = statusCount.collect()
-    println("StatusCounter: " + time + ": " + statusCounts.mkString("[", ", ", "]"))
-  }
-
-  LogAnalyzer.volumeCounter(lines) {(volumeCount: RDD[LogVolume], time: Time) =>
-    val counts = "VolumeCounter: " + time + ": " + volumeCount.collect().mkString("[", ", ", "]")
-    println(counts)
-  }
-
-  LogAnalyzer.countryCounter(lines) {(countryCount: RDD[LocationVisit], time: Time) =>
-    val counts = "CountryCounts: " + time + ": " + countryCount.collect().mkString("[", ", ", "]")
-    println(counts)
-  }
+  val ssc = StreamingContext.getOrCreate(checkpointDir, createContext)
 
   ssc.start()
   ssc.awaitTermination()
