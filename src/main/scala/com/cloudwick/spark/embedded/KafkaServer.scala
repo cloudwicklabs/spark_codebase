@@ -51,7 +51,9 @@ class KafkaServer(config: Properties = new Properties) extends LazyLogging {
     }
   }
 
-  // Start the broker
+  /**
+   * Start the broker
+   */
   def start() {
     logger.debug(s"Starting embedded Kafka broker at $brokerList (with ZK server " +
       s"at $zookeeperConnect) ...")
@@ -60,7 +62,9 @@ class KafkaServer(config: Properties = new Properties) extends LazyLogging {
       s"at $zookeeperConnect)")
   }
 
-  // Stop the broker
+  /**
+   * Stop the broker
+   */
   def stop() {
     logger.debug(s"Shutting down embedded Kafka broker at $brokerList (with ZK server " +
       s"at $zookeeperConnect)...")
@@ -70,6 +74,13 @@ class KafkaServer(config: Properties = new Properties) extends LazyLogging {
       s"at $zookeeperConnect)")
   }
 
+  /**
+   * Creates a topic with specified name
+   * @param topic name of the topic to create
+   * @param partitions number of partitions for the topic
+   * @param replicationFactor replication factor for the topic
+   * @param config kafka configuration properties
+   */
   def createTopic(topic: String,
                   partitions: Int = 1,
                   replicationFactor: Int = 1,
