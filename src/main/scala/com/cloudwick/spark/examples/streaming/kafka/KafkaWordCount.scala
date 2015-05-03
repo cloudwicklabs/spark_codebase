@@ -30,41 +30,45 @@ import org.apache.spark.SparkConf
  * 7. Check the offset consumption of the topic
  *      `bin/kafka-consumer-offset-checker.sh --zookeeper localhost:2181 --topic test-wc --group stcg`
  */
-object KafkaWordCount extends App with LazyLogging {
-  if (args.length < 4) {
-    logger.error(
-      """
-        |Usage: KafkaWordCount <zkQuorum> <group> <topics> <numThreads>
-        |         zkQuorum - Zookeeper quorum (hostname:port,hostname:port,..)
-        |         group - The group id for this consumer
-        |         topics - csv of topics to consume
-        |         numThreads - number of threads to use for consuming (ideally equal to number of
-        |                      partitions)
-      """.stripMargin
-    )
-    System.exit(1)
+object KafkaWordCount extends LazyLogging {
+
+  def main(args: Array[String]) {
+    if (args.length < 4) {
+      logger.error(
+        """
+          |Usage: KafkaWordCount <zkQuorum> <group> <topics> <numThreads>
+          |         zkQuorum - Zookeeper quorum (hostname:port,hostname:port,..)
+          |         group - The group id for this consumer
+          |         topics - csv of topics to consume
+          |         numThreads - number of threads to use for consuming (ideally equal to number of
+          |                      partitions)
+        """.stripMargin
+      )
+      System.exit(1)
+    }
+
+    val Array(zkQuorum, group, topics, numThreads) = args
+    val batchDuration = Seconds(5)
+    val windowDuration = Seconds(30)
+    val slideDuration = Seconds(10)
+    val stopWords = Set("a", "an", "the")
+    val checkpointDir = Files.createTempDirectory(this.getClass.getSimpleName).toString
+
+    val sparkConf = new SparkConf().setAppName("KafkaWordCount")
+    val ssc = new StreamingContext(sparkConf, batchDuration)
+    ssc.checkpoint(checkpointDir)
+
+    val topicMap = topics.split(",").map((_, numThreads.toInt)).toMap
+    val lines = KafkaUtils.createStream(ssc, zkQuorum, group, topicMap).map(_._2)
+
+    NetworkWordCountWindowed.count(lines, windowDuration, slideDuration, stopWords) {
+      (wordsCount: RDD[WordCount], time: Time) =>
+        val counts = time + ": " + wordsCount.collect().mkString("[", ", ", "]")
+        println(counts)
+    }
+
+    ssc.start()
+    ssc.awaitTermination()
   }
 
-  val Array(zkQuorum, group, topics, numThreads) = args
-  val batchDuration = Seconds(5)
-  val windowDuration = Seconds(30)
-  val slideDuration = Seconds(10)
-  val stopWords = Set("a", "an", "the")
-  private val checkpointDir = Files.createTempDirectory(this.getClass.getSimpleName).toString
-
-  val sparkConf = new SparkConf().setAppName("KafkaWordCount")
-  val ssc = new StreamingContext(sparkConf, batchDuration)
-  ssc.checkpoint(checkpointDir)
-
-  val topicMap = topics.split(",").map((_, numThreads.toInt)).toMap
-  val lines = KafkaUtils.createStream(ssc, zkQuorum, group, topicMap).map(_._2)
-
-  NetworkWordCountWindowed.count(lines, windowDuration, slideDuration, stopWords) {
-    (wordsCount: RDD[WordCount], time: Time) =>
-      val counts = time + ": " + wordsCount.collect().mkString("[", ", ", "]")
-      println(counts)
-  }
-
-  ssc.start()
-  ssc.awaitTermination()
 }

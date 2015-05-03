@@ -5,6 +5,7 @@ import java.net.InetAddress
 
 import com.cloudwick.cassandra.{Cassandra, CassandraLocationVisitServiceModule, CassandraLogVolumeServiceModule, CassandraStatusCountServiceModule}
 import com.cloudwick.cassandra.schema.{LocationVisit, LogVolume, StatusCount}
+import com.cloudwick.logging.LazyLogging
 import com.maxmind.geoip2.DatabaseReader.Builder
 import com.maxmind.geoip2.exception.AddressNotFoundException
 import org.apache.spark.rdd.RDD
@@ -23,7 +24,7 @@ import scala.concurrent.duration._
  * @author ashrith
  */
 object LogAnalyzer extends Cassandra with CassandraStatusCountServiceModule
-  with CassandraLogVolumeServiceModule with CassandraLocationVisitServiceModule with Logging {
+  with CassandraLogVolumeServiceModule with CassandraLocationVisitServiceModule with LazyLogging {
 
   type StatusHandler = (RDD[StatusCount], Time) => Unit
   type VolumeHandler = (RDD[LogVolume], Time) => Unit

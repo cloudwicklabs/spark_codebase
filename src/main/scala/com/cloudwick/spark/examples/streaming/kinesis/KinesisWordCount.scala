@@ -19,19 +19,7 @@ import org.apache.spark.SparkConf
  *    --master "local[*]" target/scala-2.10/spark_codebase-assembly-1.0.jar
  *    <stream-name> <aws-access-key> <aws-secret-key> <endpoint-url>`
  */
-object KinesisWordCount extends App with LazyLogging {
-  if (args.length < 4) {
-    logger.error(
-      """
-        |Usage: KinesisWordCount <stream-name> <aws-access-key> <aws-secret-key> <endpoint-url>
-        |         stream-name - is the name of the kinesis stream
-        |         aws-access-key - is the aws access key
-        |         aws-secret-key - is the aws secret access keuy
-        |         endpoint-url - is the endpoint of the kinesis service
-      """.stripMargin
-    )
-    System.exit(1)
-  }
+object KinesisWordCount extends LazyLogging {
 
   def fromCredentials(awsAccessKey: String,
                       awsSecretKey: String,
@@ -46,35 +34,51 @@ object KinesisWordCount extends App with LazyLogging {
     client
   }
 
-  val Array(streamName, awsAccessKey, awsSecretKey, endPointUrl) = args
+  def main(args: Array[String]) {
+    if (args.length < 4) {
+      logger.error(
+        """
+          |Usage: KinesisWordCount <stream-name> <aws-access-key> <aws-secret-key> <endpoint-url>
+          |         stream-name - is the name of the kinesis stream
+          |         aws-access-key - is the aws access key
+          |         aws-secret-key - is the aws secret access keuy
+          |         endpoint-url - is the endpoint of the kinesis service
+        """.stripMargin
+      )
+      System.exit(1)
+    }
 
-  // Determine the number of shards for a specified stream, so that we could create one kinesis
-  // receiver for each shard
-  val kinesisClient = fromCredentials(awsAccessKey, awsSecretKey, endPointUrl)
-  val numShards = kinesisClient.describeStream(streamName).getStreamDescription.getShards.size
+    val Array(streamName, awsAccessKey, awsSecretKey, endPointUrl) = args
 
-  val batchDuration = Seconds(2)
-  val sparkConf = new SparkConf().setAppName("KinesisWordCount").setMaster("local[*]")
-  val ssc = new StreamingContext(sparkConf, batchDuration)
+    // Determine the number of shards for a specified stream, so that we could create one kinesis
+    // receiver for each shard
+    val kinesisClient = fromCredentials(awsAccessKey, awsSecretKey, endPointUrl)
+    val numShards = kinesisClient.describeStream(streamName).getStreamDescription.getShards.size
 
-  // create receivers
-  // set aws.accessKeyId and aws.secretKey as system properties
-  System.setProperty("aws.accessKeyId", awsAccessKey)
-  System.setProperty("aws.secretKey", awsSecretKey)
-  val kinesisStreams = (0 until numShards).map { i =>
-    KinesisUtils.createStream(ssc, streamName, endPointUrl, batchDuration,
-      InitialPositionInStream.TRIM_HORIZON, StorageLevel.MEMORY_AND_DISK_2)
+    val batchDuration = Seconds(2)
+    val sparkConf = new SparkConf().setAppName("KinesisWordCount").setMaster("local[*]")
+    val ssc = new StreamingContext(sparkConf, batchDuration)
+
+    // create receivers
+    // set aws.accessKeyId and aws.secretKey as system properties
+    System.setProperty("aws.accessKeyId", awsAccessKey)
+    System.setProperty("aws.secretKey", awsSecretKey)
+    val kinesisStreams = (0 until numShards).map { i =>
+      KinesisUtils.createStream(ssc, streamName, endPointUrl, batchDuration,
+        InitialPositionInStream.TRIM_HORIZON, StorageLevel.MEMORY_AND_DISK_2)
+    }
+
+    // union all the streams
+    val unionStream = ssc.union(kinesisStreams)
+
+    // convert each record of type Byte to string
+    val words = unionStream.flatMap(new String(_).split("\\s+"))
+    val wordCounts = words.map(word => (word, 1)).reduceByKey(_ + _)
+
+    wordCounts.print()
+
+    ssc.start()
+    ssc.awaitTermination()
   }
 
-  // union all the streams
-  val unionStream = ssc.union(kinesisStreams)
-
-  // convert each record of type Byte to string
-  val words = unionStream.flatMap(new String(_).split("\\s+"))
-  val wordCounts = words.map(word => (word, 1)).reduceByKey(_ + _)
-
-  wordCounts.print()
-
-  ssc.start()
-  ssc.awaitTermination()
 }

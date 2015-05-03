@@ -1,5 +1,6 @@
 package com.cloudwick.spark.examples.streaming.local
 
+import com.cloudwick.logging.LazyLogging
 import com.cloudwick.spark.examples.core.WordCount
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
@@ -21,26 +22,30 @@ import org.apache.spark.{Logging, SparkConf}
  *    `spark-submit --class com.cloudwick.spark.examples.streaming.local.NetworkWordCountRunner
  *                  --master local[*] <path_to_jar> localhost 9999 5`
  */
-object NetworkWordCountRunner extends App with Logging {
-  if (args.length < 3) {
-    System.err.println("Usage: NetworkWordCount host port batchIntervalInSecs")
-    System.exit(1)
+object NetworkWordCountRunner extends LazyLogging {
+
+  def main(args: Array[String]) {
+    if (args.length < 3) {
+      System.err.println("Usage: NetworkWordCount host port batchIntervalInSecs")
+      System.exit(1)
+    }
+
+    val Array(host, port, batchInterval) = args
+    val stopWords = Set("a", "an", "the")
+
+    val conf = new SparkConf().setAppName("NetworkWordCount")
+    val ssc = new StreamingContext(conf, Seconds(batchInterval.toInt))
+
+    // Create a DStream that will connect to host:port
+    val lines = ssc.socketTextStream(host, port.toInt, StorageLevel.MEMORY_AND_DISK_SER)
+
+    NetworkWordCount.count(lines, stopWords) { (wordsCount: RDD[WordCount], time: Time) =>
+      val counts = time + ": " + wordsCount.collect().mkString("[", ", ", "]")
+      println(counts)
+    }
+
+    ssc.start()
+    ssc.awaitTermination()
   }
 
-  val Array(host, port, batchInterval) = args
-  val stopWords = Set("a", "an", "the")
-
-  val conf = new SparkConf().setAppName("NetworkWordCount")
-  val ssc = new StreamingContext(conf, Seconds(batchInterval.toInt))
-
-  // Create a DStream that will connect to host:port
-  val lines = ssc.socketTextStream(host, port.toInt, StorageLevel.MEMORY_AND_DISK_SER)
-
-  NetworkWordCount.count(lines, stopWords) { (wordsCount: RDD[WordCount], time: Time) =>
-    val counts = time + ": " + wordsCount.collect().mkString("[", ", ", "]")
-    println(counts)
-  }
-
-  ssc.start()
-  ssc.awaitTermination()
 }
