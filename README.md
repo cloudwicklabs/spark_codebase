@@ -5,21 +5,23 @@ This repository is a collection of Spark examples & use-case implementations for
 ## What does this repository contains ?
 
 * Spark core examples
-    * WordCount
+    * [WordCount](src/main/scala/com/cloudwick/spark/examples/core/WordCountRunner.scala)
 * Spark streaming examples
-    * NetworkWordCount
-    * NetworkWordCountWindowed
-    * RecoverableNetworkWordCount
-    * TwitterPopularTags
-    * KafkaWordCount
+    * [NetworkWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/local/NetworkWordCount.scala)
+    * [NetworkWordCountWindowed](src/main/scala/com/cloudwick/spark/examples/streaming/local/NetworkWordCountWindowed.scala)
+    * [RecoverableNetworkWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/local/RecoverableNetworkWordCount.scala)
+    * [TwitterPopularTags](src/main/scala/com/cloudwick/spark/examples/streaming/twitter/TwitterPopularTags.scala)
+    * [KafkaWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/kafka/KafkaWordCount.scala)
+    * [StatefulKafkaWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/kafka/StatefulKafkaWordCount.scala)
+    * [KinesisWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/kinesis/KinesisWordCount.scala)
 * Spark core use-cases
+    * TODO
 * Spark streaming use-cases
-    * LogAnalytics - A simple spark streaming use-case to perform apache log analysis which could
-                     read data from Kafka & Kinesis performs some analysis and persists the result's
-                     to cassandra.
+    * [LogAnalytics](src/main/scala/com/cloudwick/spark/loganalysis/LogAnalyzerRunner.scala) 
+        A simple spark streaming use-case to perform apache log analysis which could read data from Kafka & Kinesis performs some analysis and persists the result's to cassandra.
 * Testing
     * ScalaTest spec traits for Spark core, streaming and SQL API(s)
-    * Embedded Kafka and Zookeeper embedded server instances for testing
+    * Embedded [Kafka](src/main/scala/com/cloudwick/spark/embedded/KafkaServer.scala) and [Zookeeper](src/main/scala/com/cloudwick/spark/embedded/ZookeeperServer.scala) embedded server instances for testing
     
 ## How to download ?
 
