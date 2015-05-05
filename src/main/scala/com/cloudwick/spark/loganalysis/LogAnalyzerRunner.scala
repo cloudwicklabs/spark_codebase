@@ -31,8 +31,9 @@ import org.apache.spark.{Logging, SparkConf, SparkContext}
  * Running this job locally:
  * 1. Start a local Cassandra instance
  *      `${CASSANDRA_HOME}/bin/cassandra -f`
- * 2. Edit `src/main/resources/reference.conf` to match respective properties
- *    NOTE: Once the file has been updated you have to rebuild the project using `sbt assembly`
+ * 2. Copy `src/main/resources/reference.conf` to convenient location and edit to match respective
+ *    properties to match your current environment
+ *      `cp src/main/resources/reference.conf loganalysis.conf`
  * 3. If using Kafka as data source:
  *    i. Start a zookeeper local instance
  *      `${KAFKA_HOME}/bin/zookeeper-server-start.sh config/zookeeper.properties`
@@ -90,8 +91,9 @@ object LogAnalyzerRunner extends LazyLogging {
     if (args.length < 1) {
       logger.error(
         """
-          |Usage: KafkaWordCount <source>
+          |Usage: KafkaWordCount <source> <configFile>
           |         source - specifies where to read data from, ex: kinesis, kafka, kafka-direct
+          |         configFile - where to read the configurations from (ex: resources/reference.conf)
         """.stripMargin
       )
       System.exit(1)
