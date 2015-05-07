@@ -15,9 +15,9 @@ This repository is a collection of Spark examples & use-case implementations for
     * [StatefulKafkaWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/kafka/StatefulKafkaWordCount.scala)
     * [KinesisWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/kinesis/KinesisWordCount.scala)
 * Spark core use-cases
-    * TODO
+    * [LognAnalytics](src/main/scala/com/cloudwick/spark/loganalysis/LogAnalyzerRunner.scala)
 * Spark streaming use-cases
-    * [LogAnalytics](src/main/scala/com/cloudwick/spark/loganalysis/LogAnalyzerRunner.scala) 
+    * [LogAnalytics](src/main/scala/com/cloudwick/spark/loganalysis/LogAnalyzerStreamingRunner.scala) 
         A simple spark streaming use-case to perform apache log analysis which could read data from Kafka & Kinesis performs some analysis and persists the result's to cassandra.
 * Testing
     * ScalaTest spec traits for Spark core, streaming and SQL API(s)

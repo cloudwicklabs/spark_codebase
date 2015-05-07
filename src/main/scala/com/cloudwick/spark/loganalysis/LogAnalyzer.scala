@@ -3,16 +3,15 @@ package com.cloudwick.spark.loganalysis
 import java.io.{File, FileNotFoundException}
 import java.net.InetAddress
 
-import com.cloudwick.cassandra.{Cassandra, CassandraLocationVisitServiceModule, CassandraLogVolumeServiceModule, CassandraStatusCountServiceModule}
 import com.cloudwick.cassandra.schema.{LocationVisit, LogVolume, StatusCount}
+import com.cloudwick.cassandra.{Cassandra, CassandraLocationVisitServiceModule, CassandraLogVolumeServiceModule, CassandraStatusCountServiceModule}
 import com.cloudwick.logging.LazyLogging
 import com.maxmind.geoip2.DatabaseReader.Builder
 import com.maxmind.geoip2.exception.AddressNotFoundException
+import org.apache.spark.SparkFiles
 import org.apache.spark.rdd.RDD
-import org.apache.spark.streaming.StreamingContext._
 import org.apache.spark.streaming.Time
 import org.apache.spark.streaming.dstream.DStream
-import org.apache.spark.{Logging, SparkFiles}
 import org.joda.time.format.DateTimeFormat
 
 import scala.concurrent.duration._
@@ -92,17 +91,26 @@ object LogAnalyzer extends Cassandra with CassandraStatusCountServiceModule
   }
 
   /**
+   * Takes in raw log events, parses them and aggregates the status counts by using status code as
+   * the key
+   * @param lines RDD of raw log events
+   */
+  def statusCounter(lines: RDD[String]): RDD[StatusCount] = {
+    val events = prepareEvents(lines)
+
+    events.map(event => (event.responseCode, 1L)).reduceByKey(_ + _).map {
+      case (statusCode: Int, count: Long) => StatusCount(statusCode, count)
+    }
+  }
+
+  /**
    * Takes in log events, parses them and counts the number of times a status code has appeared and
    * finally persists the events to cassandra
    * @param lines a DStream of raw log event lines
    * @param handler a function `(RDD[StatusCount], Time) => Unit` to apply on the driver side
    */
   def statusCounter(lines: DStream[String])(handler: StatusHandler): Unit = {
-    val events = lines.transform(prepareEvents _)
-
-    val statusCounts = events.map(event => (event.responseCode, 1L)).reduceByKey(_ + _).map {
-      case (statusCode: Int, count: Long) => StatusCount(statusCode, count)
-    }
+    val statusCounts = lines.transform(rdd => statusCounter(rdd))
 
     statusCounts.foreachRDD((rdd: RDD[StatusCount], time: Time) => {
       handler(rdd.sortBy(_.statusCode), time) // executed at the driver
@@ -114,21 +122,31 @@ object LogAnalyzer extends Cassandra with CassandraStatusCountServiceModule
   }
 
   /**
-   * Takes in log events, parses them and counts the number of events appeared in single minute
-   * window and persists the results to cassandra
-   * @param lines a DStream of raw log events
-   * @param handler a function to apply on the driver side
+   * Takes in raw log events, parses them and performs aggregations based on the event minute
+   * interval, basically provides the number of hits per minute
+   * @param lines RDD of raw log evnets
+   * @return RDD of LogVolume
    */
-  def volumeCounter(lines: DStream[String])(handler: VolumeHandler): Unit = {
-    val events = lines.transform(prepareEvents _)
+  def volumeCounter(lines: RDD[String]): RDD[LogVolume] = {
+    val events = prepareEvents(lines)
 
-    val volumeCounts = events.map { event =>
+    events.map { event =>
       val millis = event.timeStamp.getMillis
       val minutes = Duration(millis, MILLISECONDS).toMinutes
       (minutes, 1L)
     }.reduceByKey(_ + _).map {
       case (minute: Long, count: Long) => LogVolume(minute, count)
     }
+  }
+
+  /**
+   * Takes in log events, parses them and counts the number of events appeared in single minute
+   * window and persists the results to cassandra
+   * @param lines a DStream of raw log events
+   * @param handler a function to apply on the driver side
+   */
+  def volumeCounter(lines: DStream[String])(handler: VolumeHandler): Unit = {
+    val volumeCounts = lines.transform(rdd => volumeCounter(rdd))
 
     volumeCounts.foreachRDD((rdd: RDD[LogVolume], time: Time) => {
       handler(rdd.sortBy(_.timeStamp), time)
@@ -140,19 +158,31 @@ object LogAnalyzer extends Cassandra with CassandraStatusCountServiceModule
   }
 
   /**
+   * Take in raw log events, parses them and aggreagtes based on the country & city, to obtain
+   * country and city information it performs GeoLocation lookup
+   * @param lines RDD of raw log events
+   * @return RDD of LocationVisit
+   */
+  def countryCounter(lines: RDD[String]): RDD[LocationVisit] = {
+    val events = prepareEvents(lines)
+
+    events.flatMap { event =>
+      resolveIp(event.ip)
+    }.map { loc =>
+      ((loc.country, loc.city), 1L)
+    }.reduceByKey(_ + _).map {
+      case((country: String, city: String), count: Long) => LocationVisit(country, city, count)
+    }
+  }
+
+  /**
    * Performs geo-location lookup based on the ip address of the log event, counts number of
    * (Country, City) counts and persists them to cassandra
    * @param lines a DStream of raw log events
    * @param handler a function to apply on the driver side
    */
   def countryCounter(lines: DStream[String])(handler: LocationHandler): Unit = {
-    val events = lines.transform(prepareEvents _)
-
-    val countryCounts = events.flatMap(
-      event => resolveIp(event.ip)
-    ).map(loc => ((loc.country, loc.city), 1L)).reduceByKey(_ + _).map {
-      case((country: String, city: String), count: Long) => LocationVisit(country, city, count)
-    }
+    val countryCounts = lines.transform(rdd => countryCounter(rdd))
 
     countryCounts.foreachRDD((rdd: RDD[LocationVisit], time: Time) => {
       handler(rdd.sortBy(_.country), time)
