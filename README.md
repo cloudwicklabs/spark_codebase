@@ -9,11 +9,7 @@ This repository is a collection of Spark examples & use-case implementations for
 * Spark streaming examples
     * [NetworkWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/local/NetworkWordCount.scala)
     * [NetworkWordCountWindowed](src/main/scala/com/cloudwick/spark/examples/streaming/local/NetworkWordCountWindowed.scala)
-    * [RecoverableNetworkWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/local/RecoverableNetworkWordCount.scala)
-    * [TwitterPopularTags](src/main/scala/com/cloudwick/spark/examples/streaming/twitter/TwitterPopularTags.scala)
-    * [KafkaWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/kafka/KafkaWordCount.scala)
     * [StatefulKafkaWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/kafka/StatefulKafkaWordCount.scala)
-    * [KinesisWordCount](src/main/scala/com/cloudwick/spark/examples/streaming/kinesis/KinesisWordCount.scala)
 * Spark core use-cases
     * [LognAnalytics](src/main/scala/com/cloudwick/spark/loganalysis/LogAnalyzerRunner.scala)
 * Spark streaming use-cases
